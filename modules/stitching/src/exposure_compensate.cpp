@@ -50,9 +50,13 @@ Ptr<ExposureCompensator> ExposureCompensator::createDefault(int type)
     if (type == NO)
         return makePtr<NoExposureCompensator>();
     if (type == GAIN)
-        return makePtr<GainCompensator>();
+        return makePtr<GainCompensator>(GainCompensator::GAIN);
     if (type == GAIN_BLOCKS)
-        return makePtr<BlocksGainCompensator>();
+        return makePtr<BlocksGainCompensator>(GainCompensator::GAIN);
+    if (type == CHANNELS)
+        return makePtr<GainCompensator>(GainCompensator::CHANNELS);
+    if (type == CHANNELS_BLOCKS)
+        return makePtr<BlocksGainCompensator>(GainCompensator::CHANNELS);
     CV_Error(Error::StsBadArg, "unsupported exposure compensation method");
 }
 
@@ -72,7 +76,12 @@ void GainCompensator::feed(const std::vector<Point> &corners, InputArrayOfArrays
 
     const int num_images = static_cast<int>(images.size());
     Mat_<int> N(num_images, num_images); N.setTo(0);
-    Mat_<double> I(num_images, num_images); I.setTo(0);
+    Mat I;
+    if (mode == GAIN)
+        I.create(num_images, num_images, CV_32F);
+    else if (mode == CHANNELS)
+        I.create(num_images, num_images, CV_32FC3);
+    I.setTo(0);
 
     //Rect dst_roi = resultRoi(corners, images);
     Mat subimg1, subimg2;
@@ -94,22 +103,38 @@ void GainCompensator::feed(const std::vector<Point> &corners, InputArrayOfArrays
 
                 N(i, j) = N(j, i) = std::max(1, countNonZero(intersect));
 
-                double Isum1 = 0, Isum2 = 0;
+                Vec3d Isum1 = 0, Isum2 = 0;
                 for (int y = 0; y < roi.height; ++y)
                 {
-                    const Point3_<uchar>* r1 = subimg1.ptr<Point3_<uchar> >(y);
-                    const Point3_<uchar>* r2 = subimg2.ptr<Point3_<uchar> >(y);
+                    const Vec<uchar, 3>* r1 = subimg1.ptr<Vec<uchar, 3> >(y);
+                    const Vec<uchar, 3>* r2 = subimg2.ptr<Vec<uchar, 3> >(y);
                     for (int x = 0; x < roi.width; ++x)
                     {
                         if (intersect(y, x))
                         {
-                            Isum1 += std::sqrt(static_cast<double>(sqr(r1[x].x) + sqr(r1[x].y) + sqr(r1[x].z)));
-                            Isum2 += std::sqrt(static_cast<double>(sqr(r2[x].x) + sqr(r2[x].y) + sqr(r2[x].z)));
+                            if (mode == GAIN)
+                            {
+                                Isum1[0] += norm(r1[x]);
+                                Isum2[0] += norm(r2[x]);
+                            }
+                            else if (mode == CHANNELS)
+                            {
+                                Isum1 += r1[x];
+                                Isum2 += r2[x];
+                            }
                         }
                     }
                 }
-                I(i, j) = Isum1 / N(i, j);
-                I(j, i) = Isum2 / N(i, j);
+                if (mode == GAIN)
+                {
+                    I.at<float>(i, j) = static_cast<float>(Isum1[0] / N(i, j));
+                    I.at<float>(j, i) = static_cast<float>(Isum2[0] / N(i, j));
+                }
+                else if (mode == CHANNELS)
+                {
+                    I.at<Vec3f>(i, j) = static_cast<Vec3f>(Isum1 / N(i, j));
+                    I.at<Vec3f>(j, i) = static_cast<Vec3f>(Isum2 / N(i, j));
+                }
             }
         }
     }
@@ -117,21 +142,48 @@ void GainCompensator::feed(const std::vector<Point> &corners, InputArrayOfArrays
     double alpha = 0.01;
     double beta = 100;
 
-    Mat_<double> A(num_images, num_images); A.setTo(0);
-    Mat_<double> b(num_images, 1); b.setTo(0);
-    for (int i = 0; i < num_images; ++i)
+    for (int c = 0; c < I.channels(); ++c)
     {
-        for (int j = 0; j < num_images; ++j)
+        Mat_<float> A(num_images, num_images); A.setTo(0);
+        Mat_<float> b(num_images, 1); b.setTo(0);
+        for (int i = 0; i < num_images; ++i)
         {
-            b(i, 0) += beta * N(i, j);
-            A(i, i) += beta * N(i, j);
-            if (j == i) continue;
-            A(i, i) += 2 * alpha * I(i, j) * I(i, j) * N(i, j);
-            A(i, j) -= 2 * alpha * I(i, j) * I(j, i) * N(i, j);
+            for (int j = 0; j < num_images; ++j)
+            {
+                b(i, 0) += beta * N(i, j);
+                A(i, i) += beta * N(i, j);
+                if (j != i)
+                {
+                    if (mode == GAIN)
+                    {
+                        A(i, i) += 2 * alpha * I.at<float>(i, j) * I.at<float>(i, j) * N(i, j);
+                        A(i, j) -= 2 * alpha * I.at<float>(i, j) * I.at<float>(j, i) * N(i, j);
+                    }
+                    else if (mode == CHANNELS)
+                    {
+                        A(i, i) += 2 * alpha * I.at<Vec3f>(i, j)[c] * I.at<Vec3f>(i, j)[c] * N(i, j);
+                        A(i, j) -= 2 * alpha * I.at<Vec3f>(i, j)[c] * I.at<Vec3f>(j, i)[c] * N(i, j);
+                    }
+                }
+            }
+        }
+
+        Mat_<float> gains;
+        solve(A, b, gains);
+
+        gains_.create(num_images, 1, I.type());
+        for (int i = 0; i < num_images; ++i)
+        {
+            if (mode == GAIN)
+            {
+                gains_.at<float>(i, 0) = gains(i, 0);
+            }
+            else if (mode == CHANNELS)
+            {
+                gains_.at<Vec3f>(i, 0)[c] = gains(i, 0);
+            }
         }
     }
-
-    solve(A, b, gains_);
 
     LOGLN("Exposure compensation, time: " << ((getTickCount() - t) / getTickFrequency()) << " sec");
 }
@@ -141,16 +193,24 @@ void GainCompensator::apply(int index, Point /*corner*/, InputOutputArray image,
 {
     CV_INSTRUMENT_REGION();
 
-    multiply(image, gains_(index, 0), image);
+    if (mode == GAIN)
+    {
+        multiply(image, gains_.at<float>(index, 0), image);
+    }
+    else
+    {
+        Vec3f vec_gains = gains_.at<Vec3f>(index, 0);
+        Scalar gains(vec_gains[0], vec_gains[1], vec_gains[2]);
+        multiply(image, gains, image);
+    }
 }
 
 
-std::vector<double> GainCompensator::gains() const
+Mat GainCompensator::gains() const
 {
-    std::vector<double> gains_vec(gains_.rows);
-    for (int i = 0; i < gains_.rows; ++i)
-        gains_vec[i] = gains_(i, 0);
-    return gains_vec;
+    Mat gains;
+    gains_.copyTo(gains);
+    return gains;
 }
 
 
@@ -192,9 +252,9 @@ void BlocksGainCompensator::feed(const std::vector<Point> &corners, InputArrayOf
         }
     }
 
-    GainCompensator compensator;
+    GainCompensator compensator(mode);
     compensator.feed(block_corners, block_images, block_masks);
-    std::vector<double> gains = compensator.gains();
+    Mat gains = compensator.gains();
     gain_maps_.resize(num_images);
 
     Mat_<float> ker(1, 3);
@@ -204,15 +264,25 @@ void BlocksGainCompensator::feed(const std::vector<Point> &corners, InputArrayOf
     for (int img_idx = 0; img_idx < num_images; ++img_idx)
     {
         Size bl_per_img = bl_per_imgs[img_idx];
-        gain_maps_[img_idx].create(bl_per_img, CV_32F);
+        gain_maps_[img_idx].create(bl_per_img, gains.type());
 
         {
-            Mat_<float> gain_map = gain_maps_[img_idx].getMat(ACCESS_WRITE);
+            Mat gain_map = gain_maps_[img_idx].getMat(ACCESS_WRITE);
             for (int by = 0; by < bl_per_img.height; ++by)
+            {
                 for (int bx = 0; bx < bl_per_img.width; ++bx, ++bl_idx)
-                    gain_map(by, bx) = static_cast<float>(gains[bl_idx]);
+                {
+                    if (mode == GAIN)
+                    {
+                        gain_map.at<float>(by, bx) = gains.at<float>(bl_idx, 0);
+                    }
+                    else if (mode == CHANNELS)
+                    {
+                        gain_map.at<Vec3f>(by, bx) = gains.at<Vec3f>(bl_idx, 0);
+                    }
+                }
+            }
         }
-
         sepFilter2D(gain_maps_[img_idx], gain_maps_[img_idx], CV_32F, ker, ker);
         sepFilter2D(gain_maps_[img_idx], gain_maps_[img_idx], CV_32F, ker, ker);
     }
@@ -231,19 +301,15 @@ void BlocksGainCompensator::apply(int index, Point /*corner*/, InputOutputArray 
     else
         resize(gain_maps_[index], u_gain_map, _image.size(), 0, 0, INTER_LINEAR);
 
-    Mat_<float> gain_map = u_gain_map.getMat(ACCESS_READ);
-    Mat image = _image.getMat();
-    for (int y = 0; y < image.rows; ++y)
+    if (u_gain_map.channels() != 3)
     {
-        const float* gain_row = gain_map.ptr<float>(y);
-        Point3_<uchar>* row = image.ptr<Point3_<uchar> >(y);
-        for (int x = 0; x < image.cols; ++x)
-        {
-            row[x].x = saturate_cast<uchar>(row[x].x * gain_row[x]);
-            row[x].y = saturate_cast<uchar>(row[x].y * gain_row[x]);
-            row[x].z = saturate_cast<uchar>(row[x].z * gain_row[x]);
-        }
+        std::vector<UMat> gains_channels;
+        gains_channels.push_back(u_gain_map);
+        gains_channels.push_back(u_gain_map);
+        gains_channels.push_back(u_gain_map);
+        merge(gains_channels, u_gain_map);
     }
+    multiply(_image, u_gain_map, _image, 1, _image.type());
 }
 
 } // namespace detail

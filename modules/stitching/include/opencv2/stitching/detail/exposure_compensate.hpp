@@ -62,7 +62,7 @@ class CV_EXPORTS ExposureCompensator
 public:
     virtual ~ExposureCompensator() {}
 
-    enum { NO, GAIN, GAIN_BLOCKS };
+    enum { NO, GAIN, GAIN_BLOCKS, CHANNELS, CHANNELS_BLOCKS };
     static Ptr<ExposureCompensator> createDefault(int type);
 
     /**
@@ -98,23 +98,26 @@ intensities, see @cite BL07 and @cite WJ10 for details.
 class CV_EXPORTS GainCompensator : public ExposureCompensator
 {
 public:
+    enum Mode { GAIN, CHANNELS };
+    GainCompensator(Mode mode_=GAIN) : mode(mode_) {}
     void feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
               InputArrayOfArrays masks_) CV_OVERRIDE;
     void apply(int index, Point corner, InputOutputArray image, InputArray mask) CV_OVERRIDE;
-    std::vector<double> gains() const;
+    Mat gains() const;
 
-private:
-    Mat_<double> gains_;
+protected:
+    Mode mode;
+    Mat gains_;
 };
 
 /** @brief Exposure compensator which tries to remove exposure related artifacts by adjusting image block
 intensities, see @cite UES01 for details.
  */
-class CV_EXPORTS BlocksGainCompensator : public ExposureCompensator
+class CV_EXPORTS BlocksGainCompensator : public GainCompensator
 {
 public:
-    BlocksGainCompensator(int bl_width = 32, int bl_height = 32)
-            : bl_width_(bl_width), bl_height_(bl_height) {}
+    BlocksGainCompensator(Mode mode_=GAIN, int bl_width = 32, int bl_height = 32)
+            : GainCompensator(mode_), bl_width_(bl_width), bl_height_(bl_height) {}
     void feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
               InputArrayOfArrays masks_) CV_OVERRIDE;
     void apply(int index, Point corner, InputOutputArray image, InputArray mask) CV_OVERRIDE;
