@@ -61,13 +61,41 @@ Ptr<ExposureCompensator> ExposureCompensator::createDefault(int type)
 }
 
 void GainCompensator::feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
-                           InputArrayOfArrays masks_)
+                           InputArrayOfArrays masks)
 {
     LOGLN("Exposure compensation...");
 #if ENABLE_LOG
     int64 t = getTickCount();
 #endif
 
+    const int num_images = images_.size().area();
+    std::vector<UMat> images(num_images);
+    Mat accumulated_gains;
+
+    for (int i = 0; i < num_images; ++i)
+        images_.getUMat(i).copyTo(images[i]);
+
+    for (int  n = 0; n < num_feed; ++n)
+    {
+        single_feed(corners, images, masks);
+
+        if (n == 0)
+            accumulated_gains = gains_.clone();
+        else
+            multiply(accumulated_gains, gains_, accumulated_gains);
+
+        if ((n+1) < num_feed)
+            for (int i = 0; i < num_images; ++i)
+                apply(i, corners[i], images[i], masks.getUMat(i));
+    }
+    gains_ = accumulated_gains;
+
+    LOGLN("Exposure compensation, time: " << ((getTickCount() - t) / getTickFrequency()) << " sec");
+}
+
+void GainCompensator::single_feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
+          InputArrayOfArrays masks_)
+{
     std::vector<Mat> images, masks;
     images_.getMatVector(images);
     masks_.getMatVector(masks);
@@ -184,8 +212,6 @@ void GainCompensator::feed(const std::vector<Point> &corners, InputArrayOfArrays
             }
         }
     }
-
-    LOGLN("Exposure compensation, time: " << ((getTickCount() - t) / getTickFrequency()) << " sec");
 }
 
 
@@ -252,7 +278,7 @@ void BlocksGainCompensator::feed(const std::vector<Point> &corners, InputArrayOf
         }
     }
 
-    GainCompensator compensator(mode);
+    GainCompensator compensator(mode, num_feed);
     compensator.feed(block_corners, block_images, block_masks);
     Mat gains = compensator.gains();
     gain_maps_.resize(num_images);

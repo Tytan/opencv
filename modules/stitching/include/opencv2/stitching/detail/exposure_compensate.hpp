@@ -99,14 +99,17 @@ class CV_EXPORTS GainCompensator : public ExposureCompensator
 {
 public:
     enum Mode { GAIN, CHANNELS };
-    GainCompensator(Mode mode_=GAIN) : mode(mode_) {}
+    GainCompensator(Mode mode_=GAIN, int nfeed=3) : mode(mode_), num_feed(nfeed) {}
     void feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
-              InputArrayOfArrays masks_) CV_OVERRIDE;
+              InputArrayOfArrays masks) CV_OVERRIDE;
+    void single_feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
+              InputArrayOfArrays masks_);
     void apply(int index, Point corner, InputOutputArray image, InputArray mask) CV_OVERRIDE;
     Mat gains() const;
 
 protected:
     Mode mode;
+    int num_feed;
     Mat gains_;
 };
 
@@ -116,8 +119,8 @@ intensities, see @cite UES01 for details.
 class CV_EXPORTS BlocksGainCompensator : public GainCompensator
 {
 public:
-    BlocksGainCompensator(Mode mode_=GAIN, int bl_width = 32, int bl_height = 32)
-            : GainCompensator(mode_), bl_width_(bl_width), bl_height_(bl_height) {}
+    BlocksGainCompensator(Mode mode_=GAIN, int nfeed=3, int bl_width = 32, int bl_height = 32)
+            : GainCompensator(mode_, nfeed), bl_width_(bl_width), bl_height_(bl_height) {}
     void feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
               InputArrayOfArrays masks_) CV_OVERRIDE;
     void apply(int index, Point corner, InputOutputArray image, InputArray mask) CV_OVERRIDE;
@@ -126,7 +129,6 @@ private:
     int bl_width_, bl_height_;
     std::vector<UMat> gain_maps_;
 };
-
 //! @}
 
 } // namespace detail
