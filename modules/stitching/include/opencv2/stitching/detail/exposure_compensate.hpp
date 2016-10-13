@@ -62,7 +62,7 @@ class CV_EXPORTS ExposureCompensator
 public:
     virtual ~ExposureCompensator() {}
 
-    enum { NO, GAIN, GAIN_BLOCKS, CHANNELS, CHANNELS_BLOCKS };
+    enum { NO, GAIN, GAIN_BLOCKS, GAIN_COMBINED, CHANNELS, CHANNELS_BLOCKS, CHANNELS_COMBINED };
     static Ptr<ExposureCompensator> createDefault(int type);
 
     /**
@@ -125,10 +125,23 @@ public:
               InputArrayOfArrays masks_) CV_OVERRIDE;
     void apply(int index, Point corner, InputOutputArray image, InputArray mask) CV_OVERRIDE;
 
-private:
+protected:
     int bl_width_, bl_height_;
     std::vector<UMat> gain_maps_;
 };
+
+/** @brief Exposure compensator which first compensate overall exposure,
+ *  then compensate local exposure using a block-based algorithm
+ */
+class CV_EXPORTS CombinedGainCompensator : public BlocksGainCompensator
+{
+public:
+    CombinedGainCompensator(Mode mode_=GAIN, int nfeed=3, int bl_width = 32, int bl_height = 32) :
+        BlocksGainCompensator(mode_, nfeed, bl_width, bl_height) {}
+    void feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
+              InputArrayOfArrays masks);
+};
+
 //! @}
 
 } // namespace detail

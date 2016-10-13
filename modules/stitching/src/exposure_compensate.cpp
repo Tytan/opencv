@@ -53,10 +53,14 @@ Ptr<ExposureCompensator> ExposureCompensator::createDefault(int type)
         return makePtr<GainCompensator>(GainCompensator::GAIN);
     if (type == GAIN_BLOCKS)
         return makePtr<BlocksGainCompensator>(GainCompensator::GAIN);
+    if (type == GAIN_COMBINED)
+        return makePtr<CombinedGainCompensator>(GainCompensator::GAIN);
     if (type == CHANNELS)
         return makePtr<GainCompensator>(GainCompensator::CHANNELS);
     if (type == CHANNELS_BLOCKS)
         return makePtr<BlocksGainCompensator>(GainCompensator::CHANNELS);
+    if (type == CHANNELS_COMBINED)
+        return makePtr<CombinedGainCompensator>(GainCompensator::CHANNELS);
     CV_Error(Error::StsBadArg, "unsupported exposure compensation method");
 }
 
@@ -231,7 +235,6 @@ void GainCompensator::apply(int index, Point /*corner*/, InputOutputArray image,
     }
 }
 
-
 Mat GainCompensator::gains() const
 {
     Mat gains;
@@ -336,6 +339,38 @@ void BlocksGainCompensator::apply(int index, Point /*corner*/, InputOutputArray 
         merge(gains_channels, u_gain_map);
     }
     multiply(_image, u_gain_map, _image, 1, _image.type());
+}
+
+void CombinedGainCompensator::feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
+          InputArrayOfArrays masks)
+{
+    const int num_images = images_.size().area();
+
+    std::vector<UMat> images(num_images);
+    GainCompensator compensator(mode, num_feed);
+
+    for (int i = 0; i < num_images; ++i)
+        images_.getUMat(i).copyTo(images[i]);
+
+    compensator.feed(corners, images, masks);
+    Mat global_gains = compensator.gains();
+    for (int i = 0; i < num_images; ++i)
+        compensator.apply(i, corners[i], images[i], masks.getUMat(i));
+
+    BlocksGainCompensator::feed(corners, images, masks);
+
+    for (int i = 0; i < num_images; ++i)
+    {
+        if (mode == GAIN)
+        {
+            multiply(gain_maps_[i], global_gains.at<float>(i, 0), gain_maps_[i]);
+        }
+        else if (mode == CHANNELS)
+        {
+            Vec3f vec = global_gains.at<Vec3f>(i, 0);
+            multiply(gain_maps_[i], Scalar(vec[0], vec[1], vec[2]), gain_maps_[i]);
+        }
+    }
 }
 
 } // namespace detail
