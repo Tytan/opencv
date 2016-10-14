@@ -113,15 +113,15 @@ Stitcher::Status Stitcher::estimateTransform(InputArrayOfArrays images, InputArr
 
 
 
-Stitcher::Status Stitcher::composePanorama(OutputArray pano)
+Stitcher::Status Stitcher::composePanorama(OutputArray pano, OutputArray result_mask)
 {
     CV_INSTRUMENT_REGION();
 
-    return composePanorama(std::vector<UMat>(), pano);
+    return composePanorama(std::vector<UMat>(), pano, result_mask);
 }
 
 
-Stitcher::Status Stitcher::composePanorama(InputArrayOfArrays images, OutputArray pano)
+Stitcher::Status Stitcher::composePanorama(InputArrayOfArrays images, OutputArray pano, OutputArray result_mask)
 {
     CV_INSTRUMENT_REGION();
 
@@ -357,8 +357,8 @@ Stitcher::Status Stitcher::composePanorama(InputArrayOfArrays images, OutputArra
 #if ENABLE_LOG
         int64 blend_t = getTickCount();
 #endif
-    UMat result, result_mask;
-    blender_->blend(result, result_mask);
+    UMat result, result_mask_;
+    blender_->blend(result, result_mask_);
     LOGLN("blend time: " << ((getTickCount() - blend_t) / getTickFrequency()) << " sec");
 
     LOGLN("Compositing, time: " << ((getTickCount() - t) / getTickFrequency()) << " sec");
@@ -366,25 +366,26 @@ Stitcher::Status Stitcher::composePanorama(InputArrayOfArrays images, OutputArra
     // Preliminary result is in CV_16SC3 format, but all values are in [0,255] range,
     // so convert it to avoid user confusing
     result.convertTo(pano, CV_8U);
+    result_mask_.convertTo(result_mask, CV_8U);
 
     return OK;
 }
 
 
-Stitcher::Status Stitcher::stitch(InputArrayOfArrays images, OutputArray pano)
+Stitcher::Status Stitcher::stitch(InputArrayOfArrays images, OutputArray pano, OutputArray result_mask)
 {
-    return stitch(images, noArray(), pano);
+    return stitch(images, noArray(), pano, result_mask);
 }
 
 
-Stitcher::Status Stitcher::stitch(InputArrayOfArrays images, InputArrayOfArrays masks, OutputArray pano)
+Stitcher::Status Stitcher::stitch(InputArrayOfArrays images, InputArrayOfArrays masks, OutputArray pano, OutputArray result_mask)
 {
     CV_INSTRUMENT_REGION();
 
     Status status = estimateTransform(images, masks);
     if (status != OK)
         return status;
-    return composePanorama(pano);
+    return composePanorama(pano, result_mask);
 }
 
 
