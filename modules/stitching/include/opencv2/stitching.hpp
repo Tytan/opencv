@@ -247,7 +247,7 @@ public:
     Status estimateTransform(InputArrayOfArrays images, const std::vector<std::vector<Rect> > &rois);
 
     /** @overload */
-    CV_WRAP Status composePanorama(OutputArray pano);
+    CV_WRAP Status composePanorama(OutputArray pano, OutputArray result_mask);
     /** @brief These functions try to compose the given images (or images stored internally from the other function
     calls) into the final pano under the assumption that the image transformations were estimated
     before.
@@ -259,10 +259,10 @@ public:
     @param pano Final pano.
     @return Status code.
      */
-    Status composePanorama(InputArrayOfArrays images, OutputArray pano);
+    Status composePanorama(InputArrayOfArrays images, OutputArray pano, OutputArray result_mask);
 
     /** @overload */
-    CV_WRAP Status stitch(InputArrayOfArrays images, OutputArray pano);
+    CV_WRAP Status stitch(InputArrayOfArrays images, OutputArray pano, OutputArray result_mask);
     /** @brief These functions try to stitch the given images.
 
     @param images Input images.
@@ -270,7 +270,7 @@ public:
     @param pano Final pano.
     @return Status code.
      */
-    Status stitch(InputArrayOfArrays images, const std::vector<std::vector<Rect> > &rois, OutputArray pano);
+    Status stitch(InputArrayOfArrays images, const std::vector<std::vector<Rect> > &rois, OutputArray pano, OutputArray result_mask);
 
     std::vector<int> component() const { return indices_; }
     std::vector<detail::CameraParams> cameras() const { return cameras_; }
