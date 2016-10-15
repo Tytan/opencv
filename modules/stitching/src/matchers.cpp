@@ -97,7 +97,7 @@ struct MatchPairsBody : ParallelLoopBody
             for (size_t j = 0; j < pairwise_matches[dual_pair_idx].matches.size(); ++j)
                 std::swap(pairwise_matches[dual_pair_idx].matches[j].queryIdx,
                           pairwise_matches[dual_pair_idx].matches[j].trainIdx);
-            LOG(".");
+            //LOG(".");
         }
     }
 
@@ -192,7 +192,7 @@ void CpuMatcher::match(const ImageFeatures &features1, const ImageFeatures &feat
             matches.insert(std::make_pair(m0.queryIdx, m0.trainIdx));
         }
     }
-    LOG("\n1->2 matches: " << matches_info.matches.size() << endl);
+    //LOG("\n1->2 matches: " << matches_info.matches.size() << endl);
 
     // Find 2->1 matches
     pair_matches.clear();
@@ -207,7 +207,7 @@ void CpuMatcher::match(const ImageFeatures &features1, const ImageFeatures &feat
             if (matches.find(std::make_pair(m0.trainIdx, m0.queryIdx)) == matches.end())
                 matches_info.matches.push_back(DMatch(m0.trainIdx, m0.queryIdx, m0.distance));
     }
-    LOG("1->2 & 2->1 matches: " << matches_info.matches.size() << endl);
+    //LOG("1->2 & 2->1 matches: " << matches_info.matches.size() << endl);
 }
 
 #ifdef HAVE_OPENCV_CUDAFEATURES2D
@@ -358,7 +358,7 @@ void FeaturesMatcher::operator ()(const std::vector<ImageFeatures> &features, st
         parallel_for_(Range(0, static_cast<int>(near_pairs.size())), body);
     else
         body(Range(0, static_cast<int>(near_pairs.size())));
-    LOGLN_CHAT("");
+    //LOGLN_CHAT("");
 }
 
 
@@ -500,7 +500,7 @@ void BestOf2NearestRangeMatcher::operator ()(const std::vector<ImageFeatures> &f
         parallel_for_(Range(0, static_cast<int>(near_pairs.size())), body);
     else
         body(Range(0, static_cast<int>(near_pairs.size())));
-    LOGLN_CHAT("");
+    //LOGLN_CHAT("");
 }
 
 
