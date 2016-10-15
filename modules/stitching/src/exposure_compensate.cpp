@@ -108,6 +108,7 @@ void GainCompensator::single_feed(const std::vector<Point> &corners, InputArrayO
 
     const int num_images = static_cast<int>(images.size());
     Mat_<int> N(num_images, num_images); N.setTo(0);
+    Mat_<bool> skip(num_images, 1); skip.setTo(true);
     Mat I;
     if (mode == GAIN)
         I.create(num_images, num_images, CV_32F);
@@ -167,52 +168,70 @@ void GainCompensator::single_feed(const std::vector<Point> &corners, InputArrayO
                     I.at<Vec3f>(i, j) = static_cast<Vec3f>(Isum1 / N(i, j));
                     I.at<Vec3f>(j, i) = static_cast<Vec3f>(Isum2 / N(i, j));
                 }
+                if (i != j && Isum1 != Vec3d() && Isum2 != Vec3d())
+                {
+                    skip(i, 0) = false;
+                    skip(j, 0) = false;
+                }
             }
         }
     }
 
     double alpha = 0.01;
     double beta = 100;
+    int num_eq = num_images - sum(skip)[0];
 
     for (int c = 0; c < I.channels(); ++c)
     {
-        Mat_<float> A(num_images, num_images); A.setTo(0);
-        Mat_<float> b(num_images, 1); b.setTo(0);
-        for (int i = 0; i < num_images; ++i)
+        Mat_<float> A(num_eq, num_eq); A.setTo(0);
+        Mat_<float> b(num_eq, 1); b.setTo(0);
+        for (int i = 0, ki = 0; i < num_images; ++i)
         {
-            for (int j = 0; j < num_images; ++j)
+            if (skip(i,0))
+                continue;
+            for (int j = 0, kj = 0; j < num_images; ++j)
             {
-                b(i, 0) += beta * N(i, j);
-                A(i, i) += beta * N(i, j);
+                if (skip(j,0))
+                    continue;
+                b(ki, 0) += beta * N(i, j);
+                A(ki, ki) += beta * N(i, j);
                 if (j != i)
                 {
                     if (mode == GAIN)
                     {
-                        A(i, i) += 2 * alpha * I.at<float>(i, j) * I.at<float>(i, j) * N(i, j);
-                        A(i, j) -= 2 * alpha * I.at<float>(i, j) * I.at<float>(j, i) * N(i, j);
+                        A(ki, ki) += 2 * alpha * I.at<float>(i, j) * I.at<float>(i, j) * N(i, j);
+                        A(ki, kj) -= 2 * alpha * I.at<float>(i, j) * I.at<float>(j, i) * N(i, j);
                     }
                     else if (mode == CHANNELS)
                     {
-                        A(i, i) += 2 * alpha * I.at<Vec3f>(i, j)[c] * I.at<Vec3f>(i, j)[c] * N(i, j);
-                        A(i, j) -= 2 * alpha * I.at<Vec3f>(i, j)[c] * I.at<Vec3f>(j, i)[c] * N(i, j);
+                        A(ki, ki) += 2 * alpha * I.at<Vec3f>(i, j)[c] * I.at<Vec3f>(i, j)[c] * N(i, j);
+                        A(ki, kj) -= 2 * alpha * I.at<Vec3f>(i, j)[c] * I.at<Vec3f>(j, i)[c] * N(i, j);
                     }
                 }
+                ++kj;
             }
+            ++ki;
         }
 
         Mat_<float> gains;
         solve(A, b, gains);
 
         gains_.create(num_images, 1, I.type());
-        for (int i = 0; i < num_images; ++i)
+        for (int i = 0, j = 0; i < num_images; ++i)
         {
             if (mode == GAIN)
             {
-                gains_.at<float>(i, 0) = gains(i, 0);
+                if (skip(i, 0))
+                    gains_.at<float>(i, 0) = 1;
+                else
+                    gains_.at<float>(i, 0) = gains(j++, 0);
             }
             else if (mode == CHANNELS)
             {
-                gains_.at<Vec3f>(i, 0)[c] = gains(i, 0);
+                if (skip(i, 0))
+                    gains_.at<Vec3f>(i, 0)[c] = 1;
+                else
+                    gains_.at<Vec3f>(i, 0)[c] = gains(j++, 0);
             }
         }
     }
