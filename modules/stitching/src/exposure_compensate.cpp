@@ -41,6 +41,10 @@
 //M*/
 
 #include "precomp.hpp"
+#ifdef HAVE_EIGEN
+#include <Eigen/Core>
+#include <Eigen/Dense>
+#endif
 
 namespace cv {
 namespace detail {
@@ -214,7 +218,26 @@ void GainCompensator::single_feed(const std::vector<Point> &corners, InputArrayO
         }
 
         Mat_<float> gains;
+
+#ifdef HAVE_EIGEN
+        Eigen::MatrixXf eigen_A, eigen_b, eigen_x;
+        cv2eigen(A, eigen_A);
+        cv2eigen(b, eigen_b);
+
+        Eigen::LDLT<Eigen::MatrixXf> ldlt_A(eigen_A);
+        if(ldlt_A.info() == Eigen::NumericalIssue)
+        {
+            LOGLN("  LDLT decomposition failed, using openCV's solve()");
+            solve(A, b, gains);
+        }
+        else
+        {
+            eigen_x = ldlt_A.solve(eigen_b);
+            eigen2cv(eigen_x, gains);
+        }
+#else
         solve(A, b, gains);
+#endif
 
         gains_.create(num_images, 1, I.type());
         for (int i = 0, j = 0; i < num_images; ++i)
