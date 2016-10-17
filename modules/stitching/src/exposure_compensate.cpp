@@ -56,24 +56,17 @@ Ptr<ExposureCompensator> ExposureCompensator::createDefault(int type)
     CV_Error(Error::StsBadArg, "unsupported exposure compensation method");
 }
 
-
-void ExposureCompensator::feed(const std::vector<Point> &corners, const std::vector<UMat> &images,
-                               const std::vector<UMat> &masks)
-{
-    std::vector<std::pair<UMat,uchar> > level_masks;
-    for (size_t i = 0; i < masks.size(); ++i)
-        level_masks.push_back(std::make_pair(masks[i], (uchar)255));
-    feed(corners, images, level_masks);
-}
-
-
-void GainCompensator::feed(const std::vector<Point> &corners, const std::vector<UMat> &images,
-                           const std::vector<std::pair<UMat,uchar> > &masks)
+void GainCompensator::feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
+                           InputArrayOfArrays masks_)
 {
     LOGLN("Exposure compensation...");
 #if ENABLE_LOG
     int64 t = getTickCount();
 #endif
+
+    std::vector<Mat> images, masks;
+    images_.getMatVector(images);
+    masks_.getMatVector(masks);
 
     CV_Assert(corners.size() == images.size() && images.size() == masks.size());
 
@@ -92,12 +85,12 @@ void GainCompensator::feed(const std::vector<Point> &corners, const std::vector<
             Rect roi;
             if (overlapRoi(corners[i], corners[j], images[i].size(), images[j].size(), roi))
             {
-                subimg1 = images[i](Rect(roi.tl() - corners[i], roi.br() - corners[i])).getMat(ACCESS_READ);
-                subimg2 = images[j](Rect(roi.tl() - corners[j], roi.br() - corners[j])).getMat(ACCESS_READ);
+                subimg1 = images[i](Rect(roi.tl() - corners[i], roi.br() - corners[i]));
+                subimg2 = images[j](Rect(roi.tl() - corners[j], roi.br() - corners[j]));
 
-                submask1 = masks[i].first(Rect(roi.tl() - corners[i], roi.br() - corners[i])).getMat(ACCESS_READ);
-                submask2 = masks[j].first(Rect(roi.tl() - corners[j], roi.br() - corners[j])).getMat(ACCESS_READ);
-                intersect = (submask1 == masks[i].second) & (submask2 == masks[j].second);
+                submask1 = masks[i](Rect(roi.tl() - corners[i], roi.br() - corners[i]));
+                submask2 = masks[j](Rect(roi.tl() - corners[j], roi.br() - corners[j]));
+                intersect = submask1 & submask2;
 
                 N(i, j) = N(j, i) = std::max(1, countNonZero(intersect));
 
@@ -161,9 +154,12 @@ std::vector<double> GainCompensator::gains() const
 }
 
 
-void BlocksGainCompensator::feed(const std::vector<Point> &corners, const std::vector<UMat> &images,
-                                     const std::vector<std::pair<UMat,uchar> > &masks)
+void BlocksGainCompensator::feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
+                                 InputArrayOfArrays masks_)
 {
+    std::vector<UMat> images, masks;
+    images_.getUMatVector(images);
+    masks_.getUMatVector(masks);
     CV_Assert(corners.size() == images.size() && images.size() == masks.size());
 
     const int num_images = static_cast<int>(images.size());
@@ -171,7 +167,7 @@ void BlocksGainCompensator::feed(const std::vector<Point> &corners, const std::v
     std::vector<Size> bl_per_imgs(num_images);
     std::vector<Point> block_corners;
     std::vector<UMat> block_images;
-    std::vector<std::pair<UMat,uchar> > block_masks;
+    std::vector<UMat> block_masks;
 
     // Construct blocks for gain compensator
     for (int img_idx = 0; img_idx < num_images; ++img_idx)
@@ -191,8 +187,7 @@ void BlocksGainCompensator::feed(const std::vector<Point> &corners, const std::v
 
                 block_corners.push_back(corners[img_idx] + bl_tl);
                 block_images.push_back(images[img_idx](Rect(bl_tl, bl_br)));
-                block_masks.push_back(std::make_pair(masks[img_idx].first(Rect(bl_tl, bl_br)),
-                                                masks[img_idx].second));
+                block_masks.push_back(masks[img_idx](Rect(bl_tl, bl_br)));
             }
         }
     }

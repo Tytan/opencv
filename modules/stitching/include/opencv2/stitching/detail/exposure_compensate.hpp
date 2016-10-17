@@ -68,14 +68,10 @@ public:
     /**
     @param corners Source image top-left corners
     @param images Source images
-    @param masks Image masks to update (second value in pair specifies the value which should be used
-    to detect where image is)
+    @param masks Image masks to update
      */
-    void feed(const std::vector<Point> &corners, const std::vector<UMat> &images,
-              const std::vector<UMat> &masks);
-    /** @overload */
-    virtual void feed(const std::vector<Point> &corners, const std::vector<UMat> &images,
-                      const std::vector<std::pair<UMat,uchar> > &masks) = 0;
+    virtual void feed(const std::vector<Point> &corners, InputArrayOfArrays images,
+                      InputArrayOfArrays masks) = 0;
     /** @brief Compensate exposure in the specified image.
 
     @param index Image index
@@ -91,8 +87,8 @@ public:
 class CV_EXPORTS NoExposureCompensator : public ExposureCompensator
 {
 public:
-    void feed(const std::vector<Point> &/*corners*/, const std::vector<UMat> &/*images*/,
-              const std::vector<std::pair<UMat,uchar> > &/*masks*/) CV_OVERRIDE { }
+    void feed(const std::vector<Point> &/*corners*/, InputArrayOfArrays /*images*/,
+              InputArrayOfArrays /*masks*/) CV_OVERRIDE { }
     void apply(int /*index*/, Point /*corner*/, InputOutputArray /*image*/, InputArray /*mask*/) CV_OVERRIDE { }
 };
 
@@ -102,8 +98,8 @@ intensities, see @cite BL07 and @cite WJ10 for details.
 class CV_EXPORTS GainCompensator : public ExposureCompensator
 {
 public:
-    void feed(const std::vector<Point> &corners, const std::vector<UMat> &images,
-              const std::vector<std::pair<UMat,uchar> > &masks) CV_OVERRIDE;
+    void feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
+              InputArrayOfArrays masks_) CV_OVERRIDE;
     void apply(int index, Point corner, InputOutputArray image, InputArray mask) CV_OVERRIDE;
     std::vector<double> gains() const;
 
@@ -119,8 +115,8 @@ class CV_EXPORTS BlocksGainCompensator : public ExposureCompensator
 public:
     BlocksGainCompensator(int bl_width = 32, int bl_height = 32)
             : bl_width_(bl_width), bl_height_(bl_height) {}
-    void feed(const std::vector<Point> &corners, const std::vector<UMat> &images,
-              const std::vector<std::pair<UMat,uchar> > &masks) CV_OVERRIDE;
+    void feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
+              InputArrayOfArrays masks_) CV_OVERRIDE;
     void apply(int index, Point corner, InputOutputArray image, InputArray mask) CV_OVERRIDE;
 
 private:
