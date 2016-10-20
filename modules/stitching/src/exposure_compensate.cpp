@@ -354,8 +354,6 @@ void BlocksGainCompensator::feed(const std::vector<Point> &corners, InputArrayOf
                 }
             }
         }
-        sepFilter2D(gain_maps_[img_idx], gain_maps_[img_idx], CV_32F, ker, ker, Point(-1,-1), 0, BORDER_REPLICATE);
-        sepFilter2D(gain_maps_[img_idx], gain_maps_[img_idx], CV_32F, ker, ker, Point(-1,-1), 0, BORDER_REPLICATE);
     }
 }
 
