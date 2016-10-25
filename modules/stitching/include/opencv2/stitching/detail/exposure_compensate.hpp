@@ -99,7 +99,8 @@ class CV_EXPORTS GainCompensator : public ExposureCompensator
 {
 public:
     enum Mode { GAIN, CHANNELS };
-    GainCompensator(Mode mode_=GAIN, int nfeed=3) : mode(mode_), num_feed(nfeed) {}
+    GainCompensator(Mode mode_=GAIN, int nfeed=3, double similarity_th=1.) :
+        mode(mode_), similarity_threshold(similarity_th), num_feed(nfeed) {}
     void feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
               InputArrayOfArrays masks) CV_OVERRIDE;
     void single_feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
@@ -108,7 +109,10 @@ public:
     Mat gains() const;
 
 protected:
+    void getSimilarityMask(InputArray src1, InputArray src2, OutputArray dst);
+
     Mode mode;
+    double similarity_threshold;
     int num_feed;
     Mat gains_;
 };
@@ -119,8 +123,8 @@ intensities, see @cite UES01 for details.
 class CV_EXPORTS BlocksGainCompensator : public GainCompensator
 {
 public:
-    BlocksGainCompensator(Mode mode_=GAIN, int nfeed=3, int bl_width = 32, int bl_height = 32)
-            : GainCompensator(mode_, nfeed), bl_width_(bl_width), bl_height_(bl_height) {}
+    BlocksGainCompensator(Mode mode_=GAIN, int nfeed=3, int bl_width = 32, int bl_height = 32, double similarity_th=0.1)
+            : GainCompensator(mode_, nfeed, similarity_th), bl_width_(bl_width), bl_height_(bl_height) {}
     void feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
               InputArrayOfArrays masks_) CV_OVERRIDE;
     void apply(int index, Point corner, InputOutputArray image, InputArray mask) CV_OVERRIDE;
@@ -136,8 +140,8 @@ protected:
 class CV_EXPORTS CombinedGainCompensator : public BlocksGainCompensator
 {
 public:
-    CombinedGainCompensator(Mode mode_=GAIN, int nfeed=3, int bl_width = 32, int bl_height = 32) :
-        BlocksGainCompensator(mode_, nfeed, bl_width, bl_height) {}
+    CombinedGainCompensator(Mode mode_=GAIN, int nfeed=3, int bl_width = 32, int bl_height = 32, double similarity_th=0.1) :
+        BlocksGainCompensator(mode_, nfeed, bl_width, bl_height, similarity_th) {}
     void feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
               InputArrayOfArrays masks);
 };

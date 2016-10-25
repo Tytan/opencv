@@ -101,6 +101,34 @@ void GainCompensator::feed(const std::vector<Point> &corners, InputArrayOfArrays
     LOGLN("Exposure compensation, time: " << ((getTickCount() - t) / getTickFrequency()) << " sec");
 }
 
+void GainCompensator::getSimilarityMask(InputArray src1, InputArray src2, OutputArray dst)
+{
+    CV_Assert(src1.type() == src2.type() && src1.type() == CV_8UC3);
+    if (similarity_threshold >= 1)
+    {
+        dst.assign(UMat::ones(src1.size(), CV_8U));
+    }
+    else
+    {
+        UMat diff, similarity, diff_single_channel;
+        Mat kernel;
+        std::vector<UMat> diff_channels;
+        const int max_value = 255;
+
+        absdiff(src1, src2, diff);
+        split(diff, diff_channels);
+        max(diff_channels[0], diff_channels[1], diff_single_channel);
+        max(diff_single_channel, diff_channels[2], diff_single_channel);
+        compare(diff_single_channel, int(max_value*similarity_threshold), similarity, CMP_LE);
+
+        kernel = getStructuringElement(MORPH_RECT, Size(3,3));
+        erode(similarity, similarity, kernel);
+        dilate(similarity, similarity, kernel);
+
+        dst.assign(similarity);
+    }
+}
+
 void GainCompensator::single_feed(const std::vector<Point> &corners, InputArrayOfArrays images_,
           InputArrayOfArrays masks_)
 {
@@ -122,7 +150,7 @@ void GainCompensator::single_feed(const std::vector<Point> &corners, InputArrayO
 
     //Rect dst_roi = resultRoi(corners, images);
     Mat subimg1, subimg2;
-    Mat_<uchar> submask1, submask2, intersect;
+    Mat_<uchar> submask1, submask2, intersect, similarity;
 
     for (int i = 0; i < num_images; ++i)
     {
@@ -136,7 +164,9 @@ void GainCompensator::single_feed(const std::vector<Point> &corners, InputArrayO
 
                 submask1 = masks[i](Rect(roi.tl() - corners[i], roi.br() - corners[i]));
                 submask2 = masks[j](Rect(roi.tl() - corners[j], roi.br() - corners[j]));
-                intersect = submask1 & submask2;
+
+                getSimilarityMask(subimg1, subimg2, similarity);
+                intersect = submask1 & submask2 & similarity;
 
                 N(i, j) = N(j, i) = std::max(1, countNonZero(intersect));
 
@@ -323,7 +353,7 @@ void BlocksGainCompensator::feed(const std::vector<Point> &corners, InputArrayOf
         }
     }
 
-    GainCompensator compensator(mode, num_feed);
+    GainCompensator compensator(mode, num_feed, similarity_threshold);
     compensator.feed(block_corners, block_images, block_masks);
     Mat gains = compensator.gains();
     gain_maps_.resize(num_images);
