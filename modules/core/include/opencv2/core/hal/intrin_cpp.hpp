@@ -130,7 +130,7 @@ Element-wise binary and unary operations.
 @ref v_shl, @ref v_shr
 
 - Bitwise logic:
-@ref operator &(const v_reg &a, const v_reg &b) "&",
+@ref operator&(const v_reg &a, const v_reg &b) "&",
 @ref operator |(const v_reg &a, const v_reg &b) "|",
 @ref operator ^(const v_reg &a, const v_reg &b) "^",
 @ref operator ~(const v_reg &a) "~"
@@ -140,7 +140,7 @@ Element-wise binary and unary operations.
 @ref operator >=(const v_reg &a, const v_reg &b) ">=",
 @ref operator <(const v_reg &a, const v_reg &b) "<",
 @ref operator <=(const v_reg &a, const v_reg &b) "<=",
-@ref operator ==(const v_reg &a, const v_reg &b) "==",
+@ref operator==(const v_reg &a, const v_reg &b) "==",
 @ref operator !=(const v_reg &a, const v_reg &b) "!="
 
 - min/max: @ref v_min, @ref v_max
@@ -455,8 +455,10 @@ template<typename _Tp, int n> inline v_reg<_Tp, n> operator ~ (const v_reg<_Tp, 
 {
     v_reg<_Tp, n> c;
     for( int i = 0; i < n; i++ )
+    {
         c.s[i] = V_TypeTraits<_Tp>::reinterpret_from_int(~V_TypeTraits<_Tp>::reinterpret_int(a.s[i]));
-        return c;
+    }
+    return c;
 }
 
 //! @brief Helper macro

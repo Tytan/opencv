@@ -40,7 +40,7 @@
 //
 //M*/
 
-#include "jpeg_exif.hpp"
+#include "exif.hpp"
 
 namespace {
 
@@ -73,7 +73,7 @@ ExifReader::~ExifReader()
 }
 
 /**
- * @brief Parsing the jpeg file and prepare (internally) exif directory structure
+ * @brief Parsing the file and prepare (internally) exif directory structure
  * @return  true if parsing was successful and exif information exists in JpegReader object
  *          false in case of unsuccessful parsing
  */
@@ -114,7 +114,7 @@ ExifEntry_t ExifReader::getTag(const ExifTagName tag)
 
 
 /**
- * @brief Get exif directory structure contained in jpeg file (if any)
+ * @brief Get exif directory structure contained in file (if any)
  *          This is internal function and is not exposed to client
  *
  *  @return Map where key is tag number and value is ExifEntry_t structure
@@ -160,6 +160,10 @@ std::map<int, ExifEntry_t > ExifReader::getExif()
             case APP9: case APP10: case APP11: case APP12: case APP13: case APP14: case APP15:
             case COM:
                 bytesToSkip = getFieldSize( f );
+                if (bytesToSkip < markerSize) {
+                    fclose(f);
+                    throw ExifParsingError();
+                }
                 fseek( f, static_cast<long>( bytesToSkip - markerSize ), SEEK_CUR );
                 break;
 
